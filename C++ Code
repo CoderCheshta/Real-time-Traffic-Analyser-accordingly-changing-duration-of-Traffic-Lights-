@@ -1,0 +1,108 @@
+#include <opencv2/opencv.hpp>
+#include <NvInfer.h> // TensorRT
+#include <NvOnnxParser.h>
+#include <cuda_runtime_api.h>
+#include <iostream>
+#include <vector>
+#include <queue>
+#include <map>
+#include <string>
+
+using namespace cv;
+using namespace std;
+
+// Assume simplified TensorRT/YOLOv8 Detector API
+class YOLODetector {
+public:
+    YOLODetector(const string& engine_path) {
+        // Load TensorRT engine (simplified)
+    }
+
+    vector<pair<string, Rect>> detect(Mat& frame) {
+        vector<pair<string, Rect>> detections;
+        // Run inference here (simplified mock-up)
+        // return vector of label, bounding box
+        // Ex: { {"ambulance", Rect(x, y, w, h)}, {"car", Rect(x, y, w, h)}, ... }
+        return detections;
+    }
+};
+
+// Priority structure
+map<string, int> emergencyPriority = {
+    {"ambulance", 3},
+    {"fire_engine", 2},
+    {"police", 1},
+    {"bus", 0},
+    {"bicycle", 0},
+    {"car", 0},
+    {"truck", 0},
+    {"bike", 0}
+};
+
+struct Request {
+    string label;
+    int priority;
+    Rect boundingBox;
+
+    bool operator<(const Request& other) const {
+        return priority < other.priority;
+    }
+};
+
+void trafficController(vector<Request>& detections) {
+    priority_queue<Request> pq;
+
+    for (auto& det : detections) {
+        pq.push(det);
+    }
+
+    while (!pq.empty()) {
+        Request current = pq.top();
+        pq.pop();
+
+        if (current.priority > 0) {
+            cout << "*** Emergency Vehicle Detected: " << current.label << " ***" << endl;
+            cout << "Giving Green Light for 60 seconds." << endl;
+            this_thread::sleep_for(chrono::seconds(60));
+        } else {
+            cout << "Normal vehicle (" << current.label << "). Green for 10 seconds." << endl;
+            this_thread::sleep_for(chrono::seconds(10));
+        }
+    }
+}
+
+int main() {
+    string engine_path = "best.engine"; // Your TensorRT engine from YOLOv8
+    YOLODetector detector(engine_path);
+
+    VideoCapture cap(0); // Open webcam (or video path)
+
+    if (!cap.isOpened()) {
+        cerr << "Failed to open camera!" << endl;
+        return -1;
+    }
+
+    while (true) {
+        Mat frame;
+        cap >> frame;
+        if (frame.empty()) break;
+
+        vector<pair<string, Rect>> detections_raw = detector.detect(frame);
+        vector<Request> detections;
+
+        for (auto& [label, box] : detections_raw) {
+            if (emergencyPriority.find(label) != emergencyPriority.end()) {
+                detections.push_back({label, emergencyPriority[label], box});
+            }
+        }
+
+        trafficController(detections);
+
+        imshow("Traffic Camera", frame);
+        if (waitKey(1) == 27) break; // ESC to quit
+    }
+
+    cap.release();
+    destroyAllWindows();
+    return 0;
+}
